@@ -1,0 +1,20 @@
+
+version: 2
+
+models:
+  - name: fct_trips_hourly
+    description: >
+      Hourly Yellow Taxi pickup metrics by NYC taxi zone.
+
+    columns:
+      - name: pickup_hour
+        data_tests:
+          - not_null
+
+      - name: pu_location_id
+        data_tests:
+          - not_null
+
+      - name: trip_count
+        data_tests:
+          - not_null

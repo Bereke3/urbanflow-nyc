@@ -1,0 +1,8 @@
+nyc_taxi:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: ../data/warehouse/nyc_taxi.duckdb
+      schema: analytics
+      threads: 2

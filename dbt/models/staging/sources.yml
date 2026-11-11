@@ -1,0 +1,27 @@
+
+version: 2
+
+sources:
+  - name: tlc
+    schema: raw
+    tables:
+
+      - name: yellow_trips
+        columns:
+          - name: source_month
+            data_tests:
+              - not_null
+
+      - name: taxi_zones
+        columns:
+          - name: location_id
+            data_tests:
+              - not_null
+              - unique
+
+      - name: weather_hourly
+        columns:
+          - name: weather_hour_utc
+            data_tests:
+              - not_null
+              - unique

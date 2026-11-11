@@ -1,0 +1,19 @@
+
+version: 2
+
+models:
+  - name: stg_trips
+    description: "Staging model for NYC Yellow Taxi trips"
+
+    columns:
+      - name: source_month
+        data_tests:
+          - not_null
+
+      - name: is_usable_trip
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [true, false]
+                quote: false

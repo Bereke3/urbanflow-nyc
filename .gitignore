@@ -1,0 +1,54 @@
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local IDE / OS files
+.DS_Store
+.vscode/
+.idea/
+
+# Airflow runtime
+logs/
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+
+# NYC Taxi source data
+data/raw/
+data/warehouse/
+data/bi/
+
+# dbt generated files
+dbt/target/
+dbt/logs/
+dbt/dbt_packages/
+
+# Local database files
+*.duckdb
+*.duckdb.wal
+*.duckdb.tmp
+*.sqlite
+*.sqlite3
+
+# Temporary downloads
+*.part
+*.tmp
+
+# dbt user-specific configuration
+dbt/.user.yml
+
+# Local configuration and backups
+*.log
+*.bak
