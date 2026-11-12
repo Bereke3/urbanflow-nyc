@@ -154,3 +154,21 @@ The automated DAG schedule is configured. Its first scheduled execution and comp
 - Incremental dbt models for large datasets.
 - Continuous integration for SQL and Python tests.
 - Deployment to an always-on environment.
+
+## Pipeline & Dashboard
+
+### Apache Airflow Orchestration
+
+The pipeline orchestrates data ingestion, historical
+backfill, weather validation, dbt transformations,
+data quality tests, and BI exports.
+
+![Airflow Pipeline](docs/images/airflow-pipeline.png)
+
+### Metabase Analytics Dashboard
+
+UrbanFlow provides interactive visualizations
+of NYC taxi activity by hour, pickup location,
+rainfall, and temperature.
+
+![Metabase Dashboard](docs/images/metabase-dashboard.png)
