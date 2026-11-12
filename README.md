@@ -32,6 +32,64 @@ The project explores:
 | NYC TLC | Yellow Taxi trip records |
 | Metabase | Interactive analytics dashboard |
 
+## Local Infrastructure
+
+UrbanFlow uses Docker Compose to manage:
+
+- Apache Airflow
+- PostgreSQL
+- Redis
+- Metabase with DuckDB integration
+
+### Start the infrastructure
+
+Clone the repository:
+
+```bash
+git clone https://github.com/Bereke3/urbanflow-nyc.git
+cd urbanflow-nyc
+```
+
+Create the environment configuration:
+
+```bash
+cp .env.example .env
+```
+
+Create the Metabase application volume:
+
+```bash
+docker volume create nyc-metabase-app-data
+```
+
+Build and start the services:
+
+```bash
+docker compose up -d --build
+```
+
+### Local interfaces
+
+| Service | URL |
+|---|---|
+| Airflow | http://localhost:8080 |
+| Metabase | http://localhost:3000 |
+
+### Persistent data
+
+The Metabase application database is stored
+in the external Docker volume
+`nyc-metabase-app-data`.
+
+DuckDB analytical data and downloaded Parquet
+files are stored locally and are not committed
+to Git.
+
+A fresh installation starts without the
+existing historical datasets or saved Metabase
+dashboards. These must be generated and
+configured separately.
+
 ## Architecture
 
 ```text
@@ -73,6 +131,24 @@ The DAG is named `nyc_taxi_pipeline` and contains nine tasks:
 9. `export_metabase` — Export a compatible DuckDB snapshot for Metabase.
 
 The DAG supports both explicit processing periods and automatic selection of incomplete historical months.
+
+## Pipeline & Dashboard
+
+### Apache Airflow Orchestration
+
+The pipeline orchestrates data ingestion, historical
+backfill, weather validation, dbt transformations,
+data quality tests, and BI exports.
+
+![Airflow Pipeline](docs/images/airflow-pipeline.png)
+
+### Metabase Analytics Dashboard
+
+UrbanFlow provides interactive visualizations
+of NYC taxi activity by hour, pickup location,
+rainfall, and temperature.
+
+![Metabase Dashboard](docs/images/metabase-dashboard.png)
 
 ## Data Modeling
 
@@ -157,20 +233,3 @@ The automated DAG schedule is configured. Its first scheduled execution and comp
 - Continuous integration for SQL and Python tests.
 - Deployment to an always-on environment.
 
-## Pipeline & Dashboard
-
-### Apache Airflow Orchestration
-
-The pipeline orchestrates data ingestion, historical
-backfill, weather validation, dbt transformations,
-data quality tests, and BI exports.
-
-![Airflow Pipeline](docs/images/airflow-pipeline.png)
-
-### Metabase Analytics Dashboard
-
-UrbanFlow provides interactive visualizations
-of NYC taxi activity by hour, pickup location,
-rainfall, and temperature.
-
-![Metabase Dashboard](docs/images/metabase-dashboard.png)
