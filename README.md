@@ -1,5 +1,7 @@
 # # UrbanFlow — NYC Taxi & Weather Analytics
 
+![Banner](docs/images/UrbanFlow_ NYC Data Analytics at Night.png)
+
 An end-to-end data engineering project that processes New York City Yellow Taxi trip records and historical weather data to analyze taxi activity across locations, hours, and weather conditions.
 
 The project combines **Apache Airflow, Python, DuckDB, dbt, Docker, and Metabase** into an automated ELT pipeline.
