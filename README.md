@@ -1,6 +1,6 @@
 # # UrbanFlow — NYC Taxi & Weather Analytics
 
-![Banner](docs/images/UrbanFlow_ NYC Data Analytics at Night.png)
+![Banner](docs/images/banner.png)
 
 An end-to-end data engineering project that processes New York City Yellow Taxi trip records and historical weather data to analyze taxi activity across locations, hours, and weather conditions.
 
