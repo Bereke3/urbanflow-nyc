@@ -1,235 +1,189 @@
-# # UrbanFlow — NYC Taxi & Weather Analytics
+# UrbanFlow — NYC Taxi & Weather Analytics
 
-![Banner](docs/images/banner.png)
+![UrbanFlow banner](docs/images/banner.png)
 
-An end-to-end data engineering project that processes New York City Yellow Taxi trip records and historical weather data to analyze taxi activity across locations, hours, and weather conditions.
+**UrbanFlow** is an end-to-end data engineering and analytics project that combines New York City Yellow Taxi trip records with historical weather observations. It uses automated ingestion, a DuckDB analytical warehouse, dbt transformations and quality checks, Apache Airflow orchestration, and a Metabase dashboard.
 
-The project combines **Apache Airflow, Python, DuckDB, dbt, Docker, and Metabase** into an automated ELT pipeline.
+> **Scope:** This project analyzes **recorded taxi trips**, not unmet passenger demand or the availability of empty taxis. Its weather series represents one NYC location and should not be interpreted as exact weather conditions for every taxi zone. The dashboard reports associations, not causal effects.
 
-## Business Problem
+## What the project answers
 
-How does observed NYC taxi activity vary across pickup locations, times of day, and weather conditions?
+- Which NYC taxi zones have the most recorded pickups?
+- How do pickup counts vary by hour?
+- How does observed activity compare between rainy and non-rainy hours?
+- What patterns appear across temperature ranges?
 
-The project explores:
+## Technology stack
 
-- Which NYC taxi zones have the highest recorded pickup activity?
-- What hours have the most taxi trips?
-- How does observed taxi activity differ between rainy and non-rainy hours?
-- How does temperature relate to taxi activity?
-
-**Important limitation:** Completed taxi trips measure observed activity, not unmet demand or taxi availability. Weather measurements from a representative NYC location are also a proxy rather than exact conditions for every pickup zone.
-
-## Technology Stack
-
-| Technology | Purpose |
-|---|---|
-| Python | Data ingestion and validation |
-| Apache Airflow 2.10.5 | Pipeline orchestration |
-| Docker Compose | Containerized services |
-| DuckDB | Analytical data warehouse |
-| dbt | SQL transformations and automated tests |
-| Open-Meteo | Historical weather data |
-| NYC TLC | Yellow Taxi trip records |
-| Metabase | Interactive analytics dashboard |
-
-## Local Infrastructure
-
-UrbanFlow uses Docker Compose to manage:
-
-- Apache Airflow
-- PostgreSQL
-- Redis
-- Metabase with DuckDB integration
-
-### Start the infrastructure
-
-Clone the repository:
-
-```bash
-git clone https://github.com/Bereke3/urbanflow-nyc.git
-cd urbanflow-nyc
-```
-
-Create the environment configuration:
-
-```bash
-cp .env.example .env
-```
-
-Create the Metabase application volume:
-
-```bash
-docker volume create nyc-metabase-app-data
-```
-
-Build and start the services:
-
-```bash
-docker compose up -d --build
-```
-
-### Local interfaces
-
-| Service | URL |
-|---|---|
-| Airflow | http://localhost:8080 |
-| Metabase | http://localhost:3000 |
-
-### Persistent data
-
-The Metabase application database is stored
-in the external Docker volume
-`nyc-metabase-app-data`.
-
-DuckDB analytical data and downloaded Parquet
-files are stored locally and are not committed
-to Git.
-
-A fresh installation starts without the
-existing historical datasets or saved Metabase
-dashboards. These must be generated and
-configured separately.
+| Technology | Role |
+| --- | --- |
+| Python | TLC file downloading, API ingestion, validation, and exports |
+| Apache Airflow 2.10.5 | DAG orchestration, scheduling, and historical backfill |
+| Docker Compose | Containerized local infrastructure |
+| DuckDB | File-based analytical warehouse |
+| dbt-core + dbt-duckdb | SQL staging, marts, and data tests |
+| NYC TLC | Monthly Yellow Taxi Parquet files and taxi-zone reference data |
+| Open-Meteo | Hourly historical weather data |
+| Metabase | Exploratory dashboard and saved visualizations |
 
 ## Architecture
 
-```text
-NYC TLC Parquet       Open-Meteo API
-       |                    |
-       v                    v
-   Python Ingestion & Validation
-                |
-                v
-        DuckDB Raw Layer
-                |
-                v
-         dbt Staging Layer
-                |
-                v
-         dbt Analytical Marts
-                |
-                v
-        BI DuckDB Snapshot
-                |
-                v
-         Metabase Dashboard
+```mermaid
+flowchart TD
+    A[NYC TLC monthly Parquet] --> C[Python ingestion and validation]
+    B[Open-Meteo historical API] --> C
+    C --> D[(DuckDB raw layer)]
+    D --> E[dbt staging models]
+    E --> F[dbt analytical marts and tests]
+    F --> G[Validated BI DuckDB snapshot]
+    G --> H[Metabase dashboard]
+    I[Apache Airflow DAG] -. orchestrates .-> C
+    I -. orchestrates .-> E
+    I -. validates and exports .-> G
 ```
 
-Apache Airflow orchestrates the entire workflow.
+The warehouse stores taxi trips, taxi zones, weather observations, and weather-refresh status. Trip records are aggregated by pickup hour and zone. The taxi/weather mart joins the hourly aggregates to weather observations, accounting for New York's local timezone.
 
-## Airflow Pipeline
+## Airflow pipeline
 
-The DAG is named `nyc_taxi_pipeline` and contains nine tasks:
+The `nyc_taxi_pipeline` DAG contains nine tasks, executed in this order:
 
-1. `prepare_period` — Select the processing period, including historical backfill.
-2. `has_work` — Skip downstream processing if no incomplete period is found.
-3. `download_taxi` — Download and validate TLC Parquet files.
-4. `ingest_taxi_batch` — Load trip records into DuckDB.
-5. `ingest_zones` — Load NYC taxi zone reference data.
-6. `refresh_weather` — Retrieve or reuse historical weather data.
-7. `validate_weather` — Check weather completeness before transformation.
-8. `dbt_build` — Build analytical models and execute tests.
-9. `export_metabase` — Export a compatible DuckDB snapshot for Metabase.
+| Task | Responsibility |
+| --- | --- |
+| `prepare_period` | Choose an explicit date range or the earliest incomplete historical month |
+| `has_work` | Skip downstream processing when no eligible incomplete month remains |
+| `download_taxi` | Download and validate monthly TLC Parquet data |
+| `ingest_taxi_batch` | Load or replace the selected month's raw taxi records |
+| `ingest_zones` | Load taxi-zone reference data |
+| `refresh_weather` | Fetch or reuse historical weather observations |
+| `validate_weather` | Stop downstream processing if required hourly weather coverage is incomplete |
+| `dbt_build` | Build staging/mart models and run dbt data tests |
+| `export_metabase` | Export a DuckDB snapshot compatible with the Metabase DuckDB driver |
 
-The DAG supports both explicit processing periods and automatic selection of incomplete historical months.
+The local Airflow DAG is configured for **07:00 UTC daily**. Scheduled DAG runs were observed to complete successfully on **November 11 and 12, 2026**. Scheduled execution requires Docker Desktop and the relevant containers to be running; this is **not an always-on cloud deployment**.
 
-## Pipeline & Dashboard
+The pipeline selects an incomplete month for backfill; it does not process every missing month in one run. A manual run may specify a period explicitly, for example:
 
-### Apache Airflow Orchestration
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags trigger \
+  --conf '{"start_month":"2025-04","end_month":"2025-04"}' \
+  nyc_taxi_pipeline
+```
 
-The pipeline orchestrates data ingestion, historical
-backfill, weather validation, dbt transformations,
-data quality tests, and BI exports.
+## Data modeling
 
-![Airflow Pipeline](docs/images/airflow-pipeline.png)
+- **Raw layer:** `raw.yellow_trips`, `raw.taxi_zones`, hourly weather, and refresh status.
+- **Staging:** `stg_trips` flags records according to explicit trip-validity criteria.
+- **Mart:** `fct_trips_hourly` aggregates usable trips by pickup hour and pickup zone.
+- **Mart:** `fct_taxi_weather_hourly` adds hourly weather attributes for analysis.
 
-### Metabase Analytics Dashboard
+Completed taxi trips are the observational unit; `trip_count` is not a measure of unserved demand. The single-location weather series is a geographic approximation for NYC pickup zones.
 
-UrbanFlow provides interactive visualizations
-of NYC taxi activity by hour, pickup location,
-rainfall, and temperature.
+## Data quality and reliability
 
-![Metabase Dashboard](docs/images/metabase-dashboard.png)
+- **Idempotent monthly ingestion:** Reprocessing a month replaces its rows rather than appending duplicates.
+- **Source-to-target reconciliation:** Parquet row counts are compared with loaded monthly rows when selecting backfill work.
+- **Historical coverage:** The next incomplete month is selected by examining taxi data and weather coverage.
+- **Weather quality gate:** An explicit check blocks dbt and BI export when weather for the selected period is incomplete.
+- **dbt tests:** Automated checks cover uniqueness, trip validity, and reconciliation between models.
+- **Weather caching and failure handling:** Previously cached observations can be reused; refresh status records API failures or successful fetches.
+- **Missing-source handling:** An unavailable TLC monthly file can be skipped and checked again during a later scheduled run.
+- **BI export:** A separate DuckDB snapshot is built and replaced after validation for compatibility with Metabase.
 
-## Data Modeling
+These safeguards improve reliability but do not constitute a production SLA or guarantee that the public source data is error-free.
 
-### Raw Layer
+## Pipeline and dashboard
 
-Stores source taxi trips, taxi zone reference data, historical weather observations, and weather refresh status.
+### Apache Airflow
 
-### Staging Layer
+![Airflow orchestration graph](docs/images/airflow-pipeline.png)
 
-`stg_trips` performs data preparation and identifies records that satisfy the project's usability rules.
+### Metabase
 
-### Analytical Marts
+![Metabase analytics dashboard](docs/images/metabase-dashboard.png)
 
-**`fct_trips_hourly`**
-
-Aggregates valid taxi trips by pickup hour and pickup zone.
-
-**`fct_taxi_weather_hourly`**
-
-Combines hourly taxi activity with historical weather observations.
-
-## Data Quality
-
-The pipeline includes:
-
-- Source-to-target row-count reconciliation.
-- Checks for missing weather observations.
-- dbt uniqueness tests.
-- Validity checks for trip records.
-- Trip-count reconciliation between analytical models.
-- Controlled reprocessing of incomplete months.
-
-A dedicated weather validation task prevents downstream dbt processing when required weather data is incomplete.
-
-## Reliability and Fault Tolerance
-
-The project implements several reliability mechanisms:
-
-**Idempotent ingestion:** Reprocessing the same month replaces its records rather than accumulating duplicates.
-
-**Historical backfill:** The pipeline identifies the earliest incomplete month for processing.
-
-**Weather caching:** Previously retrieved weather observations can be reused when API requests fail.
-
-**Controlled missing-source handling:** When a requested TLC file is not yet published, the pipeline can skip dependent tasks and retry during a future scheduled run.
-
-**Atomic BI snapshot replacement:** The Metabase export is prepared separately before replacing the published database file.
-
-## Analytics Dashboard
-
-The Metabase dashboard includes four visualizations:
+The dashboard contains four saved analyses:
 
 1. Taxi Pickups by Hour
 2. Top 10 NYC Taxi Zones by Pickups
 3. Rain vs No Rain — Average Taxi Pickups
 4. Temperature vs Taxi Activity
 
-The dashboard is designed for exploratory analysis. Observed weather relationships are correlations and should not be interpreted as causal effects.
+Weather/activity comparisons are descriptive correlations. In particular, seasonal patterns, weekdays, holidays, and trip-location mix can confound the comparisons.
 
-## Data Sources
+## Local development setup
+
+### Prerequisites
+
+- Docker Desktop with Docker Compose
+- Git
+- Enough available disk space for monthly TLC Parquet downloads and DuckDB datasets
+
+### Prepare the repository
+
+```bash
+git clone https://github.com/Bereke3/urbanflow-nyc.git
+cd urbanflow-nyc
+cp .env.example .env
+mkdir -p data/raw data/warehouse data/bi logs config plugins
+docker volume create nyc-metabase-app-data
+```
+
+### Build and start local services
+
+```bash
+docker compose config --quiet
+docker compose build
+docker compose up airflow-init
+docker compose up -d
+docker compose ps
+```
+
+| Service | Local URL |
+| --- | --- |
+| Airflow | http://localhost:8080 |
+| Metabase | http://localhost:3000 |
+
+**Verification status:** Docker Compose configuration validation, Airflow image build, and the deployed local pipeline have been tested. A complete first-time installation with an empty warehouse and a fresh Metabase application database has **not yet been verified end to end**. Additional initial setup, including Metabase permissions and datasource/dashboard configuration, may be required.
+
+The external Docker volume `nyc-metabase-app-data` holds the local Metabase application database. It is **not** included in this repository. A new installation does not include the author's saved Metabase dashboard or historical data. The `data/raw`, `data/warehouse`, and `data/bi` folders are also local and excluded from Git.
+
+**Do not use `docker compose down -v` to reset an existing deployment without a backup**; it can remove persistent volumes used by other services.
+
+### Check the pipeline
+
+After the stack is initialized and the DAG is available:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags list-import-errors
+
+docker compose exec airflow-scheduler \
+  airflow dags list-runs -d nyc_taxi_pipeline
+```
+
+Review task logs in Airflow for the selected period. The first run may need to download several large public files or wait for API rate limits.
+
+## Data sources
 
 - [NYC TLC Trip Record Data](https://www.nyc.gov/site/tlc/about/tlc-trip-record-data.page)
 - [Open-Meteo Historical Weather API](https://open-meteo.com/en/docs/historical-weather-api)
 
-## Development Environment
+## Project status and limitations
 
-The project was developed locally using macOS, Python, Docker Desktop, Apache Airflow, DuckDB, dbt, and Metabase.
+**Verified locally:** Monthly taxi ingestion, historical weather ingestion, dbt modeling/tests, manual and scheduled Airflow runs, historical backfill selection, and Metabase visualization. The repository's Compose configuration and custom Airflow image build have also been checked from a clean Git clone.
 
-Raw trip files, local databases, environment variables, and generated artifacts are excluded from version control.
+**Not yet verified:** A full cold-start on a new machine with empty persistent storage and fully automated restoration of Metabase saved dashboards. This project runs on a developer machine, not a continuously available hosting platform.
 
-## Project Status
+Other limitations include single-location weather observations, a descriptive rather than causal analysis, and full dbt mart rebuilds rather than incremental dbt models.
 
-The ingestion, modeling, orchestration, quality-control, and dashboard components have been implemented and exercised locally.
+## Possible next improvements
 
-The automated DAG schedule is configured. Its first scheduled execution and complete reproducibility from a clean environment require final verification.
-
-## Future Improvements
-
-- Automatic monitoring and alerting.
-- More granular weather data by geographic region.
-- Incremental dbt models for large datasets.
-- Continuous integration for SQL and Python tests.
-- Deployment to an always-on environment.
-
+- Test and automate first-time provisioning, including Metabase dashboard setup.
+- Add CI checks for Python, Compose, and dbt models.
+- Pin the Metabase image by version or digest instead of `latest`.
+- Add notifications and monitoring for scheduled-run failures.
+- Implement incremental dbt models for larger historical datasets.
+- Compare weather conditions using more geographically granular observations.
+- Deploy the pipeline to an always-on environment.
